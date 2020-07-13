@@ -1,0 +1,615 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(statsr)
+library(gridExtra)
+```
+
+### Load data
+
+Make sure your data and R Markdown files are in the same directory. When loaded
+your data file will be called `brfss2013`. Delete this note when before you submit 
+your work. 
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+This project will use data from the 2013 Behavioral Risk Factor Surveillance System (BRFSS), a survey conducted by the United States Center for Disease Control in conjunction with state BRFSS coordinators.  BRFSS is a telephone based  survey that collects data "about U.S. residents regarding their health-related risk behaviors, chronic health conditions, and use of preventive services.  It is the largest continuously conducted health survey system in the world." (source: https://www.cdc.gov/brfss/about/index.htm)
+
+Established in 1984 with 15 states, the survey currently includes respondents in all U.S. states, Washington D.C., and five U.S. territories.  In 2010, the number of completed interviews was 430,000 (source: CDC. Behavioral Risk Factor Surveillance System: 2010 survey data. Atlanta, GA: US Department of Health and Human Services, CDC; 2011. Available at http://www.cdc.gov/brfss/technical_infodata/surveydata/2010.htm. Accessed January 6, 2012.). 
+
+With technical and methodologic assistance from CDC, state health departments contract with telephone call centers to conduct the BRFSS surveys continuously through the year.  The federal government, state governments, and many universities, private organizations, and researchers use BRFSS data to identify the frequency of health behaviors and conditions, track progress toward health objectives, evaluate the effects of disease prevention activities, and rapidly assess emerging health problems.  (source: https://www.cdc.gov/mmwr/preview/mmwrhtml/mm6122a3.htm )  
+
+The survey consists of a set of core questions asked of residents of all states, plus optional BRFSS modules added by one or more states based on their needs.  States had the ability to add their own questions that were not added or evaluated by the CDC. Since the start of the survey in 1984, there have been changes in the questions asked, reflecting changing interests and topics of research, as well as changes to the methods of data collection, notably expanding to cell phone respondents, and plans to expand to web and internet panels are underway. 
+
+The large number and random sampling methodology ensure this is a high quality data set that allows for good generalizability to the population at large, however it is not perfect due to its reliance on telephony based data collection.   Respondents are randomly chosen from a list of all households with telephone in the state.  In the US, approximately 97.5% of households had telephone service in 2012, and cell phone only households was 39.4%.   No direct method of accounting for non-telephone coverage is employed by the BRFSS.  
+
+To improve accuracy, a weighting methodology is applied to the results.  
+
+> Starting in 2011, BRFSS used the weighting methodology called iterative proportional fitting (or “raking”) to weight the data.  Raking adjusts the data so that groups underrepresented in the sample can be more accurately represented in the final data set. Raking allows for the incorporation of cellular telephone survey data; it permits the introduction of additional demographic characteristics and more-accurately matches sample distributions to known demographic characteristics of populations, as compared with the pre-2011 BRFSS weighting methods. The use of raking has been shown by researchers to reduce error within estimates. BRFSS raking includes categories of age by gender, detailed race and ethnicity groups, education levels, marital status, regions within states, gender by race and ethnicity, telephone source, renter/owner status, and age groups by race and ethnicity. In 2013, 50 states, the District of Columbia, Guam, and Puerto Rico collected samples of interviews conducted both by landline telephone and cellular telephone. ...Use of the final weight in analysis is necessary if users are to make generalizations from the sample to the population.  (source: https://www.cdc.gov/brfss/annual_data/2013/pdf/Overview_2013.pdf) 
+
+In this project, the weighted versions of the data will be used wherever possible, and will be noted.
+
+As this survey data is purely observational, there was no random assignment of respondents to groups to test for the effects of various behaviors.   Therefore, it does not allow us to draw conclusions concerning causality of observed effects, but only allows helps to determine correlation.  
+
+
+* * *
+
+## Part 2: Research questions
+
+**Research question 1:**
+Can we correlate good or bad health outcomes to hours of sleep?  Sufficient sleep has been connected to a number of positive outcomes: improved mental fitness and mood, faster injury recovery and immune system response.
+
+A common recommendation is to get 7 hours of sleep. We will examine the correlation of hours of sleep to reported physical well-being.  
+
+
+**Research question 2:**
+
+Here we will add age as the third variable.  Is there a link between age, sleep, and health?  
+
+Anecdotally, we are told that older people seem to require less sleep. We will try to find if this is true.  Then we will see if there is any correlation between older people who get more sleep vs. older people who get less sleep.
+
+**Research question 3:**
+Explore the relationship between obesity, income, and race.  Recent news has emphasized the handicap that lower income and non-white people bear regarding health outcomes.  We will evaluate obesity prevalence amongst various races and see if how it relates to income.  Does being non-white add to the disadvantage brought by low income regarding the likelihood of obesity? 
+
+## Part 3: Exploratory data analysis
+
+### Question 1
+
+Can we correlate good or bad health outcomes to hours of sleep?
+```{r}
+sort(names(brfss2013))
+```
+
+##Research question 1:
+
+Get a rough idea of how people responded to the question: On average, how many hours of sleep do you get in a 24-hour period? Filter out responses that were greater than 24 hours, refused, or didn't know.
+
+```{r}
+ levels(brfss2013$X_rfhlth)
+ levels(brfss2013$genhlth)
+```
+By making the Factor an ordered value, we can treat it as.numeric() later.
+```{r}
+brfss2013 = brfss2013 %>%
+  mutate(rfhlth_ordrd = factor(brfss2013$X_rfhlth, levels = c("Good or Better Health", "Fair or Poor Health" ),
+                               ordered=TRUE))
+```
+
+```{r}
+brfss2013 %>%
+  select (X_rfhlth, rfhlth_ordrd, genhlth) %>%
+  str()
+```
+
+Create an average ReFactored health for each hour grouping.
+
+```{r}
+sleepbuckets <-
+brfss2013 %>% 
+  group_by(sleptim1) %>% 
+  filter(!(sleptim1 > 24)) %>%
+  filter(!is.na(rfhlth_ordrd)) %>%
+  summarise(count = n(),
+  #avgrfhlth = mean (as.numeric(rfhlth_ordrd)))
+  avghlth = mean (as.numeric(genhlth)))
+
+sleepbuckets
+```
+
+
+```{r}
+ggplot(data = sleepbuckets, aes(x = sleptim1, y = count)) +
+  geom_line() +
+  geom_point()+
+  ggtitle("Count of Respondents vs. Reported Hours of Sleep ") +
+  xlab("Hours of Sleep in preceding 24 hours") +
+  scale_x_continuous(minor_breaks = sleepbuckets$sleptim1) +
+  #scale_y_continuous(breaks = sleepbuckets$count)
+  ylim(0, 150000)
+
+```
+The first value we will compare against hours of sleep is genhlth, which has been converted from a 1-5 scale (Excellent-Poor) to a weighted value of _rfhlth (here it is X_rfhlth) represented as a factor with 2 values: 1 = Good or Better Health and 2 = Fair or Poor Health.  A review of the calculated variables document indicates there is no value to using the refactored value, which only serves to group five values into 2.  (https://www.cdc.gov/brfss/annual_data/2013/pdf/2013_calculated_variables_version15.pdf , page4) In this case, we will NOT use the weighted values.  
+
+We will convert genhlth to a factor in to allow us easily include this value in our statistics.
+```{r}
+brfss2013 <- brfss2013 %>%
+  mutate(genhlth_num = recode(brfss2013$genhlth, 
+ "Excellent"  = 1,
+ "Very good"  = 2,
+ "Good"  = 3,
+ "Fair" = 4,
+ "Poor" = 5, 
+  ))
+
+brfss2013 <- brfss2013 %>%
+  mutate(genhlth = factor(brfss2013$genhlth, levels = c("Excellent", "Very good", "Good", "Fair", "Poor"), ordered=TRUE))
+
+
+brfss2013 %>%
+  select (genhlth, genhlth_num) %>%
+  str()
+
+```
+
+```{r}
+brfss2013 %>%
+  select (X_rfhlth) %>%
+  str()
+```
+
+
+```{r}
+brfss2013 %>%
+  filter(!is.na(genhlth)) %>%
+  group_by(genhlth) %>%
+  summarise(n=n())
+```
+
+
+
+```{r}
+p1 <- brfss2013 %>%
+  filter(!is.na(genhlth)) %>%
+  ggplot (aes(x=genhlth)) +
+ geom_bar()
+
+p2 <- brfss2013 %>%
+  filter(!is.na(X_rfhlth)) %>%
+  ggplot (aes(x=X_rfhlth)) +
+  geom_bar()
+
+grid.arrange(p1, p2, ncol=2, nrow = 1)
+```
+
+```{r}
+unhealthysleepbuckets <-
+brfss2013 %>% 
+  group_by(sleptim1) %>% 
+  filter(!(sleptim1 > 24)) %>%
+  filter(genhlth_num <= 3 ) %>%  # only people reporting poor health
+  summarise(count = n(), 
+            avghealth= mean(as.numeric(genhlth_num), na.rm=TRUE))
+unhealthysleepbuckets
+# ggplot(data = unhealthysleepbuckets, aes(x = sleptim1, y = count)) +
+#   geom_line() +
+#   geom_point()+
+#   ggtitle("Count of Fair or Poor Health Respondents vs. Reported Hours of Sleep ") +
+#   xlab("Hours of Sleep in preceding 24 hours") +
+#   scale_x_continuous(minor_breaks = unhealthysleepbuckets$sleptim1) 
+```
+
+We compare sleep reported by healthy (in blue) and unhealthy (in red) respondents:
+```{r}
+healthysleepbuckets <-
+brfss2013 %>% 
+  group_by(sleptim1) %>% 
+  filter(!(sleptim1 > 24)) %>%
+  filter(genhlth_num > 3 ) %>%
+  summarise(count = n(), 
+            avghealth= mean(as.numeric(genhlth_num), na.rm=TRUE))
+
+healthysleepbuckets
+ggplot() +
+  geom_line(data = healthysleepbuckets, aes(x = sleptim1, y = count), color = 'blue') +
+  geom_line(data = unhealthysleepbuckets, aes(x = sleptim1, y = count), color = 'red') +
+  geom_point()+
+  ggtitle("Count Respondents vs. Reported Hours of Sleep ") +
+  xlab("Hours of Sleep in preceding 24 hours") +
+  ylab("Count (Healthy = Blue, Unhealthy = Red)") +
+  scale_x_continuous(minor_breaks = healthysleepbuckets$sleptim1) + 
+  theme(legend.position = "right") +
+  scale_color_manual(name = "Group", values = data, labels=c("Fair or Poor Health", "Good or Better Health"))
+  
+```
+
+```{r}
+ggplot(data = sleepbuckets, aes(x=sleptim1, y= avghlth )) +
+  geom_point()+
+  geom_line() + 
+  #scale_y_reverse() +
+  ylab("avg(Weighted Health): 1=Good - 5 Poor Health")+
+  #scale_y_continuous(limits=c(1,2)) +
+  geom_smooth() +
+  scale_x_continuous(minor_breaks = sleepbuckets$sleptim1) +
+  xlab("Sleep (hours)")
+
+```
+From the above plot, we can see that people with better health tend to report getting between 6 and 9 hours of sleep a night.
+
+Let's look at the average General Health of people grouped by the number of hours of sleep.  We filter out the single person who reported getting 0 hours of sleep, as that is not a useful number of data points.
+
+```{r}
+brfss2013 %>% 
+  filter(!(is.na(genhlth)), !(sleptim1 > 24), !(sleptim1 ==0) ) %>%
+  group_by(sleptim1) %>% 
+  summarise(count = n(), MeanGenHealth = mean(as.numeric(genhlth)), 
+            sd(as.numeric(genhlth)))
+```
+```{r}
+brfss2013 %>% 
+  filter(!(is.na(genhlth)), !(sleptim1 > 24), !(sleptim1 ==0) ) %>%
+    summarise(count = n(), 
+            mean(sleptim1), sd(sleptim1), 
+            AverageHealth = mean(as.numeric(genhlth)), 
+            HealthSD =  sd(as.numeric(genhlth)), 
+            WeightedHealthMargin = HealthSD/sqrt(n())
+            )
+```
+The average amount of sleep reported is 7.05 hours and the average weighted health value is 2.566549 with a margin of error of a margin of error +/- 0.001575356. 1.190475, 1.189346.  As will be seen, the average value is sufficient that we can ignore the margin of error, which is very small due to the large sample size.
+
+If the null hypothesis (Sleep doesn't affect health) is true, 95% of the reported health values would fall within 1.96 standard deviations regardless of the amount of sleep reported.  
+
+## Finding the range of values within 1.96 standard deviations of the mean
+x = mean +/- (sd * 1.96)
+Using a normal distribution and a 95% confidence interval, (z=1.96) we get a range of health values between 
+    2.566549 - (1.094395 * 1.96) = 0.4215348
+and 2.566549 + (1.094395 * 1.96) = 4.7115632.  If we find any outside this range, we can hypothesize that it is caused by insufficient (or excessive) sleep and reject the null hypothesis.
+
+
+```{r}
+AverageHealth <- 2.566549
+HealthSD <- 1.094395
+
+```
+
+sleephealthsumm2 below is a summary of the percentile values (pnorm) of the reported health values compared against the best mean health score found at 7 hours (2.344275) from the  of all respondents, grouped by hours of sleep.  For example, respondents reporting 1 hour of sleep with a MeanGenHealth average of 1.53 are in the 88.38 percentile of all the users, who average 2.56, with a SD of 1.09.
+
+We comparing each Sleep value to the best health score (2.344275) found at sleep = 7 hours.
+
+```{r}
+BestHealth <- 2.344275
+BestHealthSD <- 0.9784278
+sleephealthsumm2 <-
+brfss2013 %>% 
+  filter(!(is.na(genhlth)), !(sleptim1 > 24), !(sleptim1 ==0) ) %>%
+  group_by(sleptim1) %>% 
+  summarise(count = n(), 
+            MeanGenHealth= mean(as.numeric(genhlth)), 
+            z = (MeanGenHealth -BestHealth)/BestHealthSD , 
+            Percentile = pnorm(mean(as.numeric(genhlth)), mean = BestHealth, sd = BestHealthSD  ),
+            SD = sd(as.numeric(genhlth)), 
+            StandardError =SD/sqrt(n()),
+            LowerRange= MeanGenHealth- (1.96 * StandardError),
+            UpperRange= MeanGenHealth + (1.96 * StandardError)
+            )
+sleephealthsumm2 
+```
+In sleephealthsumm2 above and the chart below, we see the Zscore of each group of sleepers against the average 7 hour sleeper health value (2.34) and find that only sleepers who get between 5 and 11 hours report health  within a single standard deviation ( Z<=1) of Good or Better Health.  The grey confidence interval band gets wider at the extremes, drawing attention to the  data degradation at both extremes of the scale; out of the total 481,701 respondants, only 228 people reported 1 hour or less (.04%) and 125 people (.02%) reported 19 or more hours of sleep.  
+
+```{r}
+g2 <- ggplot(sleephealthsumm2, aes(x=sleptim1, y=z)) +
+    geom_point() + 
+    geom_line() + 
+    geom_smooth() +
+    ylab("Z Score compared to those getting 7 hours of sleep")+
+    xlab("Hours of sleep") +
+    scale_x_continuous(minor_breaks = sleephealthsumm2$sleptim1) + 
+    scale_y_continuous(limits = c(-.25,3))
+
+g2
+```
+
+
+## Discussion
+
+Based on the data, we can say that getting there seems to be a correlation between reporting better health and getting between 5 and 11 hours of sleep a night, with the healthiest people reporting between 6 and 9 hours of sleep a night.  
+
+It may be that less or more sleep than 6-9 hours causes one to feel less healthy, but it is equally valid to assume the reverse: feeling poorly may cause one to sleep less or more than 6-9 hours.  From this data and without random assignment there is no way from the data to determine causation.  
+
+A histogram of people in Excellent (1) health and the number of hours of sleep they get.
+
+```{r}
+brfss2013 %>% 
+  filter(!(is.na(genhlth)), !(sleptim1 > 24), !(sleptim1 ==0) ) %>%
+  group_by(sleptim1) %>% 
+  summarise(count = n(), 
+            MeanGenHealth= mean(as.numeric(genhlth)), 
+            z = (MeanGenHealth - BestHealth)/BestHealthSD , 
+            Percentile = pnorm(mean(as.numeric(genhlth)), mean = BestHealth, sd = BestHealthSD),
+            SD = sd(as.numeric(genhlth)), 
+            StandardError =SD/sqrt(n()),
+            LowerRange= MeanGenHealth- (1.96 * StandardError),
+            UpperRange= MeanGenHealth + (1.96 * StandardError)
+            )
+```
+
+Let's look at how health values are distributed among sleep hours, rather than grouping by sleptim1, we will group by genhlth.  We find the people in best health report the most sleep, averaging 7.18 hours sleep on average, with a sd=1.21.
+
+```{r}
+brfss2013 %>% 
+  filter(!(is.na(genhlth)), !(sleptim1 > 24), !(sleptim1 ==0) ) %>%
+  group_by(genhlth) %>% 
+  summarise(count = n(), 
+            AverageSleep =  mean(sleptim1), 
+            SD = sd(as.numeric(sleptim1)), 
+            StandardError =SD/sqrt(n()),
+            )
+```
+This is misleading and of limited use as the average of people in poorhealth who get 5 hours of sleep will nullify those in poor health getting 9 hours of sleep and they will appear to get 7 hours of sleep. It may be helpful to divide the responents into at those sleeping less than 7 (shortsleepers) and 7 or more hours (longsleepers) as different groups.
+
+```{r eval=FALSE, include=FALSE}
+shortsleepers <-
+brfss2013 %>% 
+  filter(!(is.na(genhlth)), !(sleptim1 > 24), !(sleptim1 ==0), !(sleptim1 >= 7) )  %>%
+  group_by(genhlth) %>% 
+  summarise(count = n(), 
+            AverageSleep =  mean(sleptim1), 
+            SD = sd(as.numeric(sleptim1)), 
+            StandardError =SD/sqrt(n()),
+            )
+shortsleepers
+```
+```{r}
+longsleepers <-
+brfss2013 %>% 
+  filter(!(is.na(genhlth)), !(sleptim1 > 24), !(sleptim1 ==0), !(sleptim1 < 7) )  %>%
+  group_by(genhlth) %>% 
+  summarise(count = n(), 
+            AverageSleep =  mean(sleptim1), 
+            SD = sd(as.numeric(sleptim1)), 
+            StandardError =SD/sqrt(n()),
+            )
+
+longsleepers
+```
+
+
+
+```{r}
+GoodHealthSleepAvg = 7.189764
+FairHealthSleepAvg = 6.850193
+BestHealth <- 2.344275
+BestHealthSD <- 0.9784278
+sleephealthsumm3 <-
+brfss2013 %>% 
+  filter(!(is.na(genhlth)), !(sleptim1 > 24), !(sleptim1 ==0) )  %>%
+  group_by(sleptim1) %>% 
+  summarise(count = n(), 
+            MeanGenHealth= mean(as.numeric(genhlth)), 
+            z = (MeanGenHealth -BestHealth)/BestHealthSD , 
+            Percentile = pnorm(mean(as.numeric(genhlth)), mean = BestHealth, sd = BestHealthSD  ),
+            SD = sd(as.numeric(genhlth)), 
+            StandardError =SD/sqrt(n()),
+            LowerRange= MeanGenHealth- (1.96 * StandardError),
+            UpperRange= MeanGenHealth + (1.96 * StandardError)
+            )
+sleephealthsumm3 
+
+```
+### Question 2
+
+Here we will add age as the third variable.  Is there a link between age, sleep, and health?  
+
+We need to decide what our definition of "older" is.  Does the data give us any indication?
+Let's look at age and sleep amongst all respondents and see if there is a change that shows up clearly.
+
+There are several calculated columns of data we can use, with 2 (X_age65yr), 6 (X_age_g) and 13 (X_ageg5yr) levels of age groupings. Using the 13 level measure, it appears obvious that there is an increase in average sleep time from 6.83 hours (410 minutes) among respondents ages 45-49 to 7.48 hours (448 minutes) among respondents 80 and older, a difference of about 9.5%.  
+
+Based on this, we'll consider older to be people aged 45 and older (X_ageg5yr >= 6).  We will use the X_age5yr column and ignore the other two.
+```{r}
+str(brfss2013$X_ageg5yr)
+```
+```{r}
+levels(brfss2013$X_ageg5yr)
+```
+```{r}
+agebuckets <-
+  brfss2013 %>%
+  filter(!is.na(X_ageg5yr), !is.na(sleptim1), !is.na(genhlth)) %>%
+  group_by(X_ageg5yr) %>%
+  summarise (count =n(), AverageSleep = mean(sleptim1, na.rm=TRUE))
+
+agebuckets
+```
+
+
+```{r}
+ab <- ggplot(data = agebuckets, aes(x=X_ageg5yr, y=AverageSleep, group=1))+
+  geom_point() +
+  geom_line() +
+  ylab("Average hours of sleep") +
+  xlab("Age grouping") +
+  theme (axis.text.x = element_text(angle = 90))
+
+ab
+```
+```{r}
+  brfss2013 %>%
+  filter(!is.na(X_ageg5yr), !is.na(sleptim1), !is.na(genhlth)) %>%
+  group_by(X_ageg5yr, genhlth) %>%
+  summarise (count =n(), MeanSleep = mean(sleptim1, na.rm=TRUE))
+```
+We find mean physical health for each combination (grouping) of age and sleep time (275 groups).  The graph that results is unclear due to large number of groups that have few datapoints (ex: there are only 95 18-24 year old respondents reporting 13 or more hours of sleep).  To remove this noise, we filter out rows that have a count less than 35.
+
+```{r}
+sleep_GroupByAge_GroupBySleep <-
+  brfss2013 %>%
+  filter(!is.na(X_ageg5yr), !is.na(sleptim1), !is.na(genhlth)) %>%
+  group_by(X_ageg5yr, sleptim1) %>%
+  summarise (count =n(), MeanGenHealth = mean(as.numeric(genhlth), na.rm=TRUE))
+sleep_GroupByAge_GroupBySleep
+sleep_GroupByAge_GroupBySleep_filtered <-
+  sleep_GroupByAge_GroupBySleep %>%
+  filter(count>35)
+sleep_GroupByAge_GroupBySleep_filtered  
+sleep_GroupByAge_GroupBySleep
+
+```
+
+```{r fig.height=8, fig.width=12}
+gsleep_GroupByAge_GroupBySleep <- ggplot(data = sleep_GroupByAge_GroupBySleep_filtered, aes(x=sleptim1, y=MeanGenHealth, color=X_ageg5yr))+
+  geom_point() +
+  geom_line() +
+  #geom_smooth() +
+  ylab("MeanGenHealth 1= Excellent, 5 = Poor") +
+  xlab("Hours of sleep") +
+  theme (axis.text.x = element_text(angle = 90))
+gsleep_GroupByAge_GroupBySleep
+```
+This plot seems to make clear that older people are generally less healthy than younger people.  People who sleep 7 hours generally seem to report the best health amongst their age cohort.  No reason or causation for this connection can be inferred.
+
+Let's try to correlate age and sleep to reported health.
+
+```{r}
+sleep_GroupByAge_GroupByhealth <-
+  brfss2013 %>%
+  filter(!is.na(X_ageg5yr), !is.na(sleptim1), !is.na(genhlth)) %>%
+  group_by(X_ageg5yr, genhlth) %>%
+  summarise (count =n(), AverageSleep = mean(as.numeric(sleptim1), na.rm=TRUE))
+sleep_GroupByAge_GroupByhealth
+```
+```{r fig.height=8, fig.width=12}
+gsleep_GroupByAge_GroupByhealth <- ggplot(data = sleep_GroupByAge_GroupByhealth, aes(x=X_ageg5yr, y=AverageSleep, color=genhlth))+
+  geom_point(aes( x=X_ageg5yr, y=AverageSleep, color=genhlth, group=genhlth)) +
+  geom_line(aes(x=X_ageg5yr, y=AverageSleep, color=genhlth, group=genhlth)) +
+  #geom_smooth() +
+  ylab("Average Hours of Sleep") +
+  xlab("Age Group") +
+  theme (axis.text.x = element_text(angle = 90))
+gsleep_GroupByAge_GroupByhealth
+```
+The plot above shows that sleep seems to be more closely related to health in the younger groups where there are clear distinctions between health and hours of sleep, although even there the differences are somewhat small as a percentage of overall sleep.  For example, for people aged 18-24, the poorest health people are reporting 6.63 hours of sleep vs. the Excellent health people report 7.25 hours of sleep, a difference of only 38 minutes.  The biggest difference is for people aged 30-34, whose sleep difference amounts to a bit more than 60 minutes.
+
+We can draw boxplots for any given age group to show the consistancy of the 7 hour rule, but details are hard to make out.  I've broken out two of the groups below for closer examination.
+```{r fig.height=8, fig.width=12}
+brfss2013 %>%
+  filter(!is.na(X_ageg5yr), !is.na(sleptim1), !is.na(genhlth)) %>%
+  group_by(genhlth) %>%
+  ggplot()+
+  geom_boxplot(aes(x=X_ageg5yr, y=sleptim1, color=genhlth)) +
+  ylab("Average Hours of Sleep") +
+  xlab("Age Group") +
+  scale_y_continuous(minor_breaks = sleepbuckets$sleptim1) 
+  theme (axis.text.x = element_text(angle = 90))
+
+```
+
+
+Below are two I have a personal interest in (mine and my father's age group.)  These are just two of the groups from the chart above and offered here as examples.
+
+```{r fig.height=8, fig.width=12}
+brfss2013 %>%
+  filter(!is.na(X_ageg5yr), !is.na(sleptim1), !is.na(genhlth), as.numeric(X_ageg5yr) ==8) %>%
+  group_by(genhlth) %>%
+  ggplot()+
+  geom_boxplot(aes(x=X_ageg5yr, y=sleptim1, color=genhlth)) +
+  ylab("Average Hours of Sleep") +
+  xlab("Age Group") +
+  scale_y_continuous(minor_breaks = sleepbuckets$sleptim1) 
+  theme (axis.text.x = element_text(angle = 90))
+
+```
+```{r fig.height=8, fig.width=12}
+brfss2013 %>%
+  filter(!is.na(X_ageg5yr), !is.na(sleptim1), !is.na(genhlth), as.numeric(X_ageg5yr) ==13) %>%
+  group_by(genhlth) %>%
+  ggplot()+
+  geom_boxplot(aes(x=X_ageg5yr, y=sleptim1, color=genhlth)) +
+  ylab("Average Hours of Sleep") +
+  xlab("Age Group") +
+  scale_y_continuous(minor_breaks = sleepbuckets$sleptim1) 
+  theme (axis.text.x = element_text(angle = 90))
+
+```
+From the two charts above, it can be seen that the data is quite skewed.  For example in the Age 80 or older group, the Excellent, Very Good, and Good, and Fair health groups find the median falling at the top of the interquartile range, (at 8 hours of sleep). 
+
+
+## Research question 3:
+Explore the relationship between obesity, income, and race.  Recent news has emphasized the handicap that lower income and non-white people bear regarding health outcomes.  We will evaluate obesity prevalence amongst various races and see if how it relates to income.  Does being non-white add to the disadvantage brought by low income regarding the likelihood of obesity? 
+
+### Race
+
+In the data, we have a column X_race, a factor with 8 levels: 
+
+* 1:  White Only, Non-Hispanic Respondents who reported they are white and not of Hispanic origin. (_MRACE1=1 and _HISPANC=2)
+* 2:  Black Only, Non-Hispanic Respondents who reported they are black and not of Hispanic origin. (_MRACE1=2 and _HISPANC=2)
+* 3:  American Indian Or Alaskan Native Only, Non-Hispanic Respondents who reported they are American Indian or AlaskanNative and not of Hispanic origin. (_MRACE1=3 and _HISPANC=2)
+* 4:  Asian Only, Non-Hispanic Respondents who reported they are Asian and not of Hispanic origin. (_MRACE1=4 and _HISPANC=2)
+* 5:  Native Hawaiian Or Other Pacific Islander Only, Non-Hispanic Respondents who reported they are Native Hawaiian or Pacific Islander and not of Hispanic origin. (_MRACE1=5 and _HISPANC=2)
+* 6:  Other Race Only, Non-Hispanic Respondents who reported they are of some other race group not listed in the question responses and are not of Hispanic origin. (_MRACE1=6 and _HISPANC=2)
+* 7:  Multiracial, Non-HispanicRespondents who reported they are of more than one race group and are not of Hispanic origin. (_MRACE1=7 and _HISPANC=2)
+* 8:  HispanicRespondents who reported they are of Hispanic origin. ( _HISPANC=1) 
+* 9:  Don’t Know/Not Sure/Refused Respondents who reported they did not know, or refused to give their race and are not of Hispanic origin or did not know, or refused to answer if they are of Hispanic origin. (_MRACE1 =77, 99 and _HISPANC=2 or _HISPANC=7, 9)
+
+### Obesity
+
+BMI is Body Mass Index, which is a widely used measure of obesity based on weight and height.  
+
+> Body Mass Index (BMI) is an anthropometric index of weight and height that is defined as body weight in kilograms divided by height in meters squared (Keys et al., 1972). source: https://www.cdc.gov/nccdphp/dnpao/growthcharts/training/bmiage/page1.html 
+
+The formula provided by the CDC is $BMI = weight (kg) / height (m)^{2}$
+
+BMI values typically used are underweight (<18.5), normal(18.5-24.9), overweight (25-29.9), and obese (>=30).
+
+In our data, we have a column X_bmi5 which is the calculated value of BMI wtkg3/(htm4 * htm4) The value has 2 implied decimal places and needs to be divided by 100 to get the value.
+
+
+
+```{r}
+brfss2013 %>%
+  select (X_race,X_bmi5,wtkg3, htm4) %>%
+  str()
+```
+
+```{r}
+brfss2013 %>%
+   slice(1:6) %>%
+  select (X_race, wtkg3, htm4, X_bmi5, wtkg3/htm4)
+  #select (brfss2013$X_bmi5) %>%
+  #str()
+```
+For Income, there is a factor column provided in the data called income2.  
+
+```{r}
+  levels (brfss2013$income2)
+```
+
+```{r}
+bmi_GroupByIncome_GroupByRace <-
+  brfss2013 %>%
+  filter(!is.na(X_race), !is.na(income2), !is.na(X_bmi5))  %>%
+  group_by(income2, X_race) %>%
+  summarise (count =n(), MeanBMI = mean(X_bmi5)/100)
+bmi_GroupByIncome_GroupByRace
+```
+
+```{r fig.height=8, fig.width=12}
+bmi_GroupByIncome_GroupByRace %>%
+ ggplot(aes(x=income2, y=MeanBMI, color=X_race))+
+  geom_point(aes(x=income2, y=MeanBMI, color=X_race, group=X_race)) +
+  geom_line(aes(x=income2, y=MeanBMI, color=X_race, group=X_race)) +
+  #geom_smooth() +
+  ylab("Average BMI") +
+  xlab("Income") +
+  theme (axis.text.x = element_text(angle = 90))
+```
+This plot shows that BMI does seem to reduce as income increases, and it seems to make clear the correlation of BMI to race.  Aside from the Asian group,  White, non-Hispanic people are the least obese at lower incomes and retain that status through all income groups.  The BMI of all groups improve as income grows, with all approaching the normal range of 18.5-24.9, although only Asian, non-Hispanic actually attain and sustain healthy/normal weight BMI values.  Our initial impression is that it does appear that non-white groups suffer from lower incomes to a larger extent than the white non-Hispanic groups.  Even at higher incomes, they continue to be far from the 24.9 upper bound of the healthy BMI range, with Black and American Indian/Alaska natives still at approximately 29, almost the upper range of the overweight range (25.0-29.9).
+
+
+Now that we cleaned up the data in a way that addresses the needs of the research questions we want to explore, we are ready to continue with our analysis.
+```{r}
+
+summary(bmi_GroupByIncome_GroupByRace)
+```
+
